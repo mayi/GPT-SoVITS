@@ -10,6 +10,7 @@ import sys
 import os, re, logging
 now_dir = os.getcwd()
 sys.path.insert(0, now_dir)
+
 import LangSegment
 logging.getLogger("markdown_it").setLevel(logging.ERROR)
 logging.getLogger("urllib3").setLevel(logging.ERROR)
@@ -21,39 +22,41 @@ logging.getLogger("torchaudio._extension").setLevel(logging.ERROR)
 import pdb
 import torch
 
+model_path = os.environ.get("MODEL_PATH", "GPT_SoVITS/pretrained_models")
+cnhubert_base_path = model_path + "/chinese-hubert-base"
+bert_path = model_path + "/chinese-roberta-wwm-ext-large"
+
+weights_path = os.environ.get("WEIGHTS_PATH", "GPT_SoVITS/weights")
+# 预提供的权重
+pretrained_sovits_path = weights_path + "/pretrained_SoVITS_weights/s2G488k.pth"
+pretrained_gpt_path = weights_path + "/pretrained_GPT_weights/s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt"
+# 其他的权重
+gpt_weights_path = weights_path + "/GPT_weights"
+sovits_weights_path = weights_path + "/SoVITS_weights"
+
+gpt_path = pretrained_gpt_path
+sovits_path = pretrained_sovits_path
+
+# 打印所有的路径
+print("cnhubert_base_path:", cnhubert_base_path)
+print("bert_path:", bert_path)
+print("pretrained_sovits_path:", pretrained_sovits_path)
+print("pretrained_gpt_path:", pretrained_gpt_path)
+print("gpt_weights_path:", gpt_weights_path)
+print("sovits_weights_path:", sovits_weights_path)
+
 if os.path.exists("./gweight.txt"):
     with open("./gweight.txt", 'r', encoding="utf-8") as file:
-        gweight_data = file.read()
-        gpt_path = os.environ.get(
-            "gpt_path", gweight_data)
-else:
-    gpt_path = os.environ.get(
-        "gpt_path", "GPT_SoVITS/pretrained_models/s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt")
+        gpt_path = file.read()
 
 if os.path.exists("./sweight.txt"):
     with open("./sweight.txt", 'r', encoding="utf-8") as file:
-        sweight_data = file.read()
-        sovits_path = os.environ.get("sovits_path", sweight_data)
-else:
-    sovits_path = os.environ.get("sovits_path", "GPT_SoVITS/pretrained_models/s2G488k.pth")
-# gpt_path = os.environ.get(
-#     "gpt_path", "pretrained_models/s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt"
-# )
-# sovits_path = os.environ.get("sovits_path", "pretrained_models/s2G488k.pth")
-cnhubert_base_path = os.environ.get(
-    "cnhubert_base_path", "GPT_SoVITS/pretrained_models/chinese-hubert-base"
-)
-bert_path = os.environ.get(
-    "bert_path", "GPT_SoVITS/pretrained_models/chinese-roberta-wwm-ext-large"
-)
-infer_ttswebui = os.environ.get("infer_ttswebui", 9872)
-infer_ttswebui = int(infer_ttswebui)
-is_share = os.environ.get("is_share", "False")
-is_share = eval(is_share)
+        sovits_path = file.read()
+
 if "_CUDA_VISIBLE_DEVICES" in os.environ:
     os.environ["CUDA_VISIBLE_DEVICES"] = os.environ["_CUDA_VISIBLE_DEVICES"]
 is_half = eval(os.environ.get("is_half", "True")) and torch.cuda.is_available()
-import gradio as gr
+
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 import numpy as np
 import librosa
@@ -140,6 +143,7 @@ else:
 
 def change_sovits_weights(sovits_path):
     global vq_model, hps
+    print(sovits_path)
     dict_s2 = torch.load(sovits_path, map_location="cpu")
     hps = dict_s2["config"]
     hps = DictToAttrRecursive(hps)
@@ -161,10 +165,6 @@ def change_sovits_weights(sovits_path):
     with open("./sweight.txt", "w", encoding="utf-8") as f:
         f.write(sovits_path)
 
-
-change_sovits_weights(sovits_path)
-
-
 def change_gpt_weights(gpt_path):
     global hz, max_sec, t2s_model, config
     hz = 50
@@ -179,11 +179,13 @@ def change_gpt_weights(gpt_path):
     t2s_model.eval()
     total = sum([param.nelement() for param in t2s_model.parameters()])
     print("Number of parameter: %.2fM" % (total / 1e6))
-    with open("./gweight.txt", "w", encoding="utf-8") as f: f.write(gpt_path)
+    with open("./gweight.txt", "w", encoding="utf-8") as f:
+        f.write(gpt_path)
 
 
 change_gpt_weights(gpt_path)
 
+change_sovits_weights(sovits_path)
 
 def get_spepc(hps, filename):
     audio = load_audio(filename, int(hps.data.sampling_rate))
@@ -530,96 +532,130 @@ def change_choices():
     SoVITS_names, GPT_names = get_weights_names()
     return {"choices": sorted(SoVITS_names, key=custom_sort_key), "__type__": "update"}, {"choices": sorted(GPT_names, key=custom_sort_key), "__type__": "update"}
 
-
-pretrained_sovits_name = "GPT_SoVITS/pretrained_models/s2G488k.pth"
-pretrained_gpt_name = "GPT_SoVITS/pretrained_models/s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt"
-SoVITS_weight_root = "SoVITS_weights"
-GPT_weight_root = "GPT_weights"
-os.makedirs(SoVITS_weight_root, exist_ok=True)
-os.makedirs(GPT_weight_root, exist_ok=True)
-
+os.makedirs(sovits_weights_path, exist_ok=True)
+os.makedirs(gpt_weights_path, exist_ok=True)
 
 def get_weights_names():
-    SoVITS_names = [pretrained_sovits_name]
-    for name in os.listdir(SoVITS_weight_root):
-        if name.endswith(".pth"): SoVITS_names.append("%s/%s" % (SoVITS_weight_root, name))
-    GPT_names = [pretrained_gpt_name]
-    for name in os.listdir(GPT_weight_root):
-        if name.endswith(".ckpt"): GPT_names.append("%s/%s" % (GPT_weight_root, name))
+    SoVITS_names = [pretrained_sovits_path]
+    for name in os.listdir(sovits_weights_path):
+        if name.endswith(".pth"): SoVITS_names.append("%s/%s" % (sovits_weights_path, name))
+    GPT_names = [pretrained_gpt_path]
+    for name in os.listdir(gpt_weights_path):
+        if name.endswith(".ckpt"): GPT_names.append("%s/%s" % (gpt_weights_path, name))
     return SoVITS_names, GPT_names
 
 
 SoVITS_names, GPT_names = get_weights_names()
 
-with gr.Blocks(title="GPT-SoVITS WebUI") as app:
-    gr.Markdown(
-        value=i18n("本软件以MIT协议开源, 作者不对软件具备任何控制力, 使用软件者、传播软件导出的声音者自负全责. <br>如不认可该条款, 则不能使用或引用软件包内任何代码和文件. 详见根目录<b>LICENSE</b>.")
-    )
-    with gr.Group():
-        gr.Markdown(value=i18n("模型切换"))
-        with gr.Row():
-            GPT_dropdown = gr.Dropdown(label=i18n("GPT模型列表"), choices=sorted(GPT_names, key=custom_sort_key), value=gpt_path, interactive=True)
-            SoVITS_dropdown = gr.Dropdown(label=i18n("SoVITS模型列表"), choices=sorted(SoVITS_names, key=custom_sort_key), value=sovits_path, interactive=True)
-            refresh_button = gr.Button(i18n("刷新模型路径"), variant="primary")
-            refresh_button.click(fn=change_choices, inputs=[], outputs=[SoVITS_dropdown, GPT_dropdown])
-            SoVITS_dropdown.change(change_sovits_weights, [SoVITS_dropdown], [])
-            GPT_dropdown.change(change_gpt_weights, [GPT_dropdown], [])
-        gr.Markdown(value=i18n("*请上传并填写参考信息"))
-        with gr.Row():
-            inp_ref = gr.Audio(label=i18n("请上传3~10秒内参考音频，超过会报错！"), type="filepath")
-            with gr.Column():
-                ref_text_free = gr.Checkbox(label=i18n("开启无参考文本模式。不填参考文本亦相当于开启。"), value=False, interactive=True, show_label=True)
-                gr.Markdown(i18n("使用无参考文本模式时建议使用微调的GPT，听不清参考音频说的啥(不晓得写啥)可以开，开启后无视填写的参考文本。"))
-                prompt_text = gr.Textbox(label=i18n("参考音频的文本"), value="")
-            prompt_language = gr.Dropdown(
-                label=i18n("参考音频的语种"), choices=[i18n("中文"), i18n("英文"), i18n("日文"), i18n("中英混合"), i18n("日英混合"), i18n("多语种混合")], value=i18n("中文")
-            )
-        gr.Markdown(value=i18n("*请填写需要合成的目标文本和语种模式"))
-        with gr.Row():
-            text = gr.Textbox(label=i18n("需要合成的文本"), value="")
-            text_language = gr.Dropdown(
-                label=i18n("需要合成的语种"), choices=[i18n("中文"), i18n("英文"), i18n("日文"), i18n("中英混合"), i18n("日英混合"), i18n("多语种混合")], value=i18n("中文")
-            )
-            how_to_cut = gr.Radio(
-                label=i18n("怎么切"),
-                choices=[i18n("不切"), i18n("凑四句一切"), i18n("凑50字一切"), i18n("按中文句号。切"), i18n("按英文句号.切"), i18n("按标点符号切"), ],
-                value=i18n("凑四句一切"),
-                interactive=True,
-            )
-            with gr.Row():
-                gr.Markdown(value=i18n("gpt采样参数(无参考文本时不要太低)："))
-                top_k = gr.Slider(minimum=1,maximum=100,step=1,label=i18n("top_k"),value=5,interactive=True)
-                top_p = gr.Slider(minimum=0,maximum=1,step=0.05,label=i18n("top_p"),value=1,interactive=True)
-                temperature = gr.Slider(minimum=0,maximum=1,step=0.05,label=i18n("temperature"),value=1,interactive=True)
-            inference_button = gr.Button(i18n("合成语音"), variant="primary")
-            output = gr.Audio(label=i18n("输出的语音"))
+# 改写为streamlit代码
+import streamlit as st
 
-        inference_button.click(
-            get_tts_wav,
-            [inp_ref, prompt_text, prompt_language, text, text_language, how_to_cut, top_k, top_p, temperature, ref_text_free],
-            [output],
+class InferenceUI:
+    def __init__(self):
+        self.gpt_path = gpt_path
+        self.sovits_path = sovits_path
+        self.prompt_text = ""
+        self.prompt_language = "中文"
+        self.text = ""
+        self.text_language = "中文"
+        self.how_to_cut = "凑四句一切"
+        self.top_k = 5
+        self.top_p = 1.0
+        self.temperature = 1.0
+        self.ref_text_free = False
+
+    def get_weights_names(self):
+        SoVITS_names = [pretrained_sovits_path]
+        for name in os.listdir(sovits_weights_path):
+            if name.endswith(".pth"): SoVITS_names.append("%s/%s" % (SoVITS_weight_root, name))
+        GPT_names = [pretrained_gpt_path]
+        for name in os.listdir(gpt_weights_path):
+            if name.endswith(".ckpt"): GPT_names.append("%s/%s" % (GPT_weight_root, name))
+        return SoVITS_names, GPT_names
+
+    def change_choices(self):
+        SoVITS_names, GPT_names = self.get_weights_names()
+        return {"choices": sorted(SoVITS_names, key=custom_sort_key), "__type__": "update"}, {"choices": sorted(GPT_names, key=custom_sort_key), "__type__": "update"}
+
+    def change_sovits_weights(self, sovits_path):
+        change_sovits_weights(sovits_path)
+
+    def change_gpt_weights(self, gpt_path):
+        change_gpt_weights(gpt_path)
+
+    def get_tts_wav(self, ref_wav_path, prompt_text, prompt_language, text, text_language, how_to_cut, top_k, top_p, temperature, ref_free):
+        for sr, wav in get_tts_wav(ref_wav_path, prompt_text, prompt_language, text, text_language, how_to_cut, top_k, top_p, temperature, ref_free):
+            return sr, wav
+
+    def split(self, todo_text):
+        return split(todo_text)
+
+    def cut1(self, inp):
+        return cut1(inp)
+
+    def cut2(self, inp):
+        return cut2(inp)
+
+    def cut3(self, inp):
+        return cut3(inp)
+
+    def cut4(self, inp):
+        return cut4(inp)
+
+    def cut5(self, inp):
+        return cut5(inp)
+    
+    def run(self):
+        st.title("GPT-SoVITS WebUI")
+        st.markdown(i18n("本软件以MIT协议开源, 作者不对软件具备任何控制力, 使用软件者、传播软件导出的声音者自负全责. <br>如不认可该条款, 则不能使用或引用软件包内任何代码和文件. 详见根目录<b>LICENSE</b>."))
+        st.markdown(i18n("模型切换"))
+        GPT_dropdown = st.selectbox(i18n("GPT模型列表"), sorted(GPT_names, key=custom_sort_key), index=GPT_names.index(self.gpt_path))
+        SoVITS_dropdown = st.selectbox(i18n("SoVITS模型列表"), sorted(SoVITS_names, key=custom_sort_key), index=SoVITS_names.index(self.sovits_path))
+        refresh_button = st.button(i18n("刷新模型路径"))
+        if refresh_button:
+            self.change_choices()
+        self.sovits_path = SoVITS_dropdown
+        self.gpt_path = GPT_dropdown
+        self.change_sovits_weights(SoVITS_dropdown)
+        self.change_gpt_weights(GPT_dropdown)
+        st.markdown(i18n("*请上传并填写参考信息"))
+        inp_ref = st.file_uploader(i18n("请上传3~10秒内参考音频，超过会报错！"), type=["wav", "mp3"])
+        ref_text_free = st.checkbox(i18n("开启无参考文本模式。不填参考文本亦相当于开启。"), value=self.ref_text_free)
+        st.markdown(
+            i18n("使用无参考文本模式时建议使用微调的GPT，听不清参考音频说的啥(不晓得写啥)可以开，开启后无视填写的参考文本。")
         )
+        prompt_text = st.text_area(i18n("参考音频的文本"), self.prompt_text)
+        prompt_language = st.selectbox(i18n("参考音频的语种"), (i18n("中文"), i18n("英文"), i18n("日文"), i18n("中英混合"), i18n("日英混合"), i18n("多语种混合")))
+        st.markdown(i18n("*请填写需要合成的目标文本和语种模式"))
+        text = st.text_area(i18n("需要合成的文本"), self.text)
+        text_language = st.selectbox(i18n("需要合成的语种"), (i18n("中文"), i18n("英文"), i18n("日文"), i18n("中英混合"), i18n("日英混合"), i18n("多语种混合")))
+        how_to_cut = st.radio(i18n("怎么切"), (i18n("不切"), i18n("凑四句一切"), i18n("凑50字一切"), i18n("按中文句号。切"), i18n("按英文句号.切"), i18n("按标点符号切")))
+        top_k = st.slider(i18n("top_k"), 1, 100, self.top_k)
+        top_p = st.slider(i18n("top_p"), 0.0, 1.0, self.top_p, 0.05)
+        temperature = st.slider(i18n("temperature"), 0.0, 1.0, self.temperature, 0.05)
+        inference_button = st.button(i18n("合成语音"))
+        if inference_button:
+            sr, wav = self.get_tts_wav(inp_ref, prompt_text, prompt_language, text, text_language, how_to_cut, top_k, top_p, temperature, ref_text_free)
+            st.audio(wav, format="audio/wav")
+        st.markdown(i18n("文本切分工具。太长的文本合成出来效果不一定好，所以太长建议先切。合成会根据文本的换行分开合成再拼起来。"))
+        text_inp = st.text_area(i18n("需要合成的切分前文本"), "")
+        button1 = st.button(i18n("凑四句一切"))
+        button2 = st.button(i18n("凑50字一切"))
+        button3 = st.button(i18n("按中文句号。切"))
+        button4 = st.button(i18n("按英文句号.切"))
+        button5 = st.button(i18n("按标点符号切"))
+        text_opt = st.text_area(i18n("切分后文本"), "")
+        if button1:
+            text_opt = self.cut1(text_inp)
+        if button2:
+            text_opt = self.cut2(text_inp)
+        if button3:
+            text_opt = self.cut3(text_inp)
+        if button4:
+            text_opt = self.cut4(text_inp)
+        if button5:
+            text_opt = self.cut5(text_inp)
+        st.markdown(i18n("后续将支持转音素、手工修改音素、语音合成分步执行。"))
 
-        gr.Markdown(value=i18n("文本切分工具。太长的文本合成出来效果不一定好，所以太长建议先切。合成会根据文本的换行分开合成再拼起来。"))
-        with gr.Row():
-            text_inp = gr.Textbox(label=i18n("需要合成的切分前文本"), value="")
-            button1 = gr.Button(i18n("凑四句一切"), variant="primary")
-            button2 = gr.Button(i18n("凑50字一切"), variant="primary")
-            button3 = gr.Button(i18n("按中文句号。切"), variant="primary")
-            button4 = gr.Button(i18n("按英文句号.切"), variant="primary")
-            button5 = gr.Button(i18n("按标点符号切"), variant="primary")
-            text_opt = gr.Textbox(label=i18n("切分后文本"), value="")
-            button1.click(cut1, [text_inp], [text_opt])
-            button2.click(cut2, [text_inp], [text_opt])
-            button3.click(cut3, [text_inp], [text_opt])
-            button4.click(cut4, [text_inp], [text_opt])
-            button5.click(cut5, [text_inp], [text_opt])
-        gr.Markdown(value=i18n("后续将支持转音素、手工修改音素、语音合成分步执行。"))
-
-app.queue(concurrency_count=511, max_size=1022).launch(
-    server_name="0.0.0.0",
-    inbrowser=True,
-    share=is_share,
-    server_port=infer_ttswebui,
-    quiet=True,
-)
+if __name__ == "__main__":
+    InferenceUI().run()
