@@ -28,3 +28,4 @@ Faster_Whisper
 wordsegment
 streamlit
 fastapi
+uvicorn[standard]
