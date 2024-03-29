@@ -1,8 +1,8 @@
 from fastapi import FastAPI, File, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from typing import List
 from pydantic import BaseModel
-
+import uuid
 
 '''
 按中英混合识别
@@ -120,6 +120,7 @@ class Inference:
         self.dtype = torch.float16 if self.is_half == True else torch.float32
 
         self.print_settings()
+        self.init_temp_dir()
         self.load_model()
         self.change_gpt_weights(self.gpt_path)
         self.change_sovits_weights(self.sovits_path)
@@ -127,6 +128,7 @@ class Inference:
         self.splitter = SplitText()
 
         self.get_weights_names()
+
 
     def print_settings(self):
         print("cnhubert_base_path:", self.cnhubert_base_path)
@@ -140,6 +142,12 @@ class Inference:
         print("sovits_path:", self.sovits_path)
         print("is_half:", self.is_half)
         print("device:", self.device)
+
+    def init_temp_dir(self):
+        os.makedirs("./temp", exist_ok=True)
+
+    def get_temp_dir(self):
+        return "./temp"
 
     def load_model(self):
         self.tokenizer = AutoTokenizer.from_pretrained(self.bert_path)
@@ -239,7 +247,7 @@ class Inference:
         return bert
 
     def get_first(self, text):
-        pattern = "[" + "".join(re.escape(sep) for sep in self.splits) + "]"
+        pattern = "[" + "".join(re.escape(sep) for sep in self.splitter.splits) + "]"
         text = re.split(pattern, text)[0].strip()
         return text
 
@@ -324,11 +332,11 @@ class Inference:
         text_language = self.dict_language[text_language]
         if not ref_free:
             prompt_text = prompt_text.strip("\n")
-            if (prompt_text[-1] not in self.splits):
+            if (prompt_text[-1] not in self.splitter.splits):
                 prompt_text += "。" if prompt_language != "en" else "."
             print(i18n("实际输入的参考文本:"), prompt_text)
         text = text.strip("\n")
-        if (text[0] not in self.splits and len(self.get_first(text)) < 4):
+        if (text[0] not in self.splitter.splits and len(self.get_first(text)) < 4):
             text = "。" + text if text_language != "en" else "." + text
         
         print(i18n("实际输入的目标文本:"), text)
@@ -382,7 +390,7 @@ class Inference:
             # 解决输入目标文本的空行导致报错的问题
             if (len(text.strip()) == 0):
                 continue
-            if (text[-1] not in self.splits):
+            if (text[-1] not in self.splitter.splits):
                 text += "。" if text_language != "en" else "."
             print(i18n("实际输入的目标文本(每句):"), text)
             phones2, bert2, norm_text2 = self.get_phones_and_bert(text, text_language)
@@ -432,7 +440,7 @@ class Inference:
             audio_opt.append(zero_wav)
             t4 = ttime()
         print("%.3f\t%.3f\t%.3f\t%.3f" % (t1 - t0, t2 - t1, t3 - t2, t4 - t3))
-        return self.hps.data.sampling_rate, (np.concatenate(audio_opt, 0) * 32768).astype(
+        yield self.hps.data.sampling_rate, (np.concatenate(audio_opt, 0) * 32768).astype(
             np.int16
         )
 
@@ -537,24 +545,42 @@ class CutTextRequest(BaseModel):
     how_to_cut: int
 
 class TTSRequest(BaseModel):
-    ref_wav: UploadFile
+    ref_wav_path: str
     prompt_text: str
     prompt_language: str
     text: str
     text_language: str
-    how_to_cut: int
+    how_to_cut: str
     top_k: int
     top_p: float
     temperature: float
     ref_free: bool
 
-@app.post("/tts")
-async def tts(ref_wav: UploadFile = File(...), prompt_text: str = None, prompt_language: str = "中文", text: str = None, text_language: str = "中文", how_to_cut: str = "不切", top_k: int = 20, top_p: float = 0.6, temperature: float = 0.6, ref_free: bool = False):
-    ref_wav_path = "./ref.wav"
+@app.post("/upload_ref_wave")
+async def upload_ref_wave(file: UploadFile = File(...)):
+    ref_wav_path = inference.get_temp_dir() + "/" + str(uuid.uuid4())
     with open(ref_wav_path, "wb") as f:
-        f.write(ref_wav.file.read())
-    sampling_rate, audio = inference.get_tts_wav(ref_wav_path, prompt_text, prompt_language, text, text_language, how_to_cut, top_k, top_p, temperature, ref_free)
-    return FileResponse(audio, media_type="audio/wav")
+        f.write(file.file.read())    
+    return ref_wav_path
+
+@app.post("/tts")
+async def tts(request: TTSRequest):
+    audio_generator = inference.get_tts_wav(
+        request.ref_wav_path,
+        request.prompt_text,
+        request.prompt_language,
+        request.text,
+        request.text_language,
+        request.how_to_cut,
+        request.top_k,
+        request.top_p,
+        request.temperature,
+        request.ref_free
+    )
+    with open("output.mp3", "wb") as f:
+        for chunk in audio_generator:
+            f.write(chunk[1].tobytes())
+    return FileResponse("output.mp3")
 
 @app.get("/change_choices")
 async def change_choices():

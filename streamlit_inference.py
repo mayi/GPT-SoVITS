@@ -83,15 +83,30 @@ class InferenceUI:
         except requests.exceptions.RequestException as e:
             logging.error(e)
 
+    def upload_ref_wave(self, bytes_data):
+        try:
+            response = requests.post(
+                self.inference_host + "upload_ref_wave",
+                files={"file": bytes_data},
+            )
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            logging.error(e)
+
     def get_tts_wav(self, ref_wav_path, prompt_text, prompt_language, text, text_language, how_to_cut, top_k, top_p, temperature, ref_free):
-        m = MultipartEncoder(fields={"file": ("filename", ref_wav_path, "audio/mp3")})
-
-        r = requests.post(
-            server_url, data=m, headers={"Content-Type": m.content_type}, timeout=8000
-        )
-
-        return r
-
+        json_data = {
+            "ref_wav_path": ref_wav_path,
+            "prompt_text": prompt_text,
+            "prompt_language": prompt_language,
+            "text": text,
+            "text_language": text_language,
+            "how_to_cut": how_to_cut,
+            "top_k": top_k,
+            "top_p": top_p,
+            "temperature": temperature,
+            "ref_free": ref_free,
+        }
         try:
             response = requests.post(
                 self.inference_host + "tts",
@@ -109,7 +124,8 @@ class InferenceUI:
                 },
             )
             response.raise_for_status()
-            return response.json()
+            print(response)
+            return response.content
         except requests.exceptions.RequestException as e:
             logging.error(e)
 
@@ -136,6 +152,10 @@ class InferenceUI:
         self.change_gpt_weights(GPT_dropdown)
         st.markdown(i18n("*请上传并填写参考信息"))
         inp_ref = st.file_uploader(i18n("请上传3~10秒内参考音频，超过会报错！"), type=["wav", "mp3"])
+        if inp_ref:
+            st.audio(inp_ref, format="audio/wav")
+            st.session_state.ref_wav_path = self.upload_ref_wave(inp_ref.getvalue())
+            print(st.session_state.ref_wav_path)
         ref_text_free = st.checkbox(i18n("开启无参考文本模式。不填参考文本亦相当于开启。"), value=self.ref_text_free)
         st.markdown(
             i18n("使用无参考文本模式时建议使用微调的GPT，听不清参考音频说的啥(不晓得写啥)可以开，开启后无视填写的参考文本。")
@@ -145,13 +165,15 @@ class InferenceUI:
         st.markdown(i18n("*请填写需要合成的目标文本和语种模式"))
         text = st.text_area(i18n("需要合成的文本"), self.text)
         text_language = st.selectbox(i18n("需要合成的语种"), (i18n("中文"), i18n("英文"), i18n("日文"), i18n("中英混合"), i18n("日英混合"), i18n("多语种混合")))
-        how_to_cut = st.radio(i18n("怎么切"), (i18n("不切"), i18n("凑四句一切"), i18n("凑50字一切"), i18n("按中文句号。切"), i18n("按英文句号.切"), i18n("按标点符号切")))
+        how_to_cut = st.radio(i18n("怎么切"), [i18n("不切"), i18n("凑四句一切"), i18n("凑50字一切"), i18n("按中文句号。切"), i18n("按英文句号.切"), i18n("按标点符号切")])
         top_k = st.slider(i18n("top_k"), 1, 100, self.top_k)
         top_p = st.slider(i18n("top_p"), 0.0, 1.0, self.top_p, 0.05)
         temperature = st.slider(i18n("temperature"), 0.0, 1.0, self.temperature, 0.05)
         inference_button = st.button(i18n("合成语音"))
         if inference_button:
-            sr, wav = self.get_tts_wav(inp_ref, prompt_text, prompt_language, text, text_language, how_to_cut, top_k, top_p, temperature, ref_text_free)
+            if st.session_state.ref_wav_path is None:
+                st.error(i18n("请上传参考音频"))
+            wav = self.get_tts_wav(st.session_state.ref_wav_path, prompt_text, prompt_language, text, text_language, how_to_cut, top_k, top_p, temperature, ref_text_free)
             st.audio(wav, format="audio/wav")
         st.markdown(i18n("文本切分工具。太长的文本合成出来效果不一定好，所以太长建议先切。合成会根据文本的换行分开合成再拼起来。"))
         text_inp = st.text_area(i18n("需要合成的切分前文本"), "")
