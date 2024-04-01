@@ -577,10 +577,10 @@ async def tts(request: TTSRequest):
         request.temperature,
         request.ref_free
     )
-    with open("output.mp3", "wb") as f:
+    with open("output.wav", "wb") as f:
         for chunk in audio_generator:
             f.write(chunk[1].tobytes())
-    return FileResponse("output.mp3")
+    return FileResponse("output.wav")
 
 @app.get("/change_choices")
 async def change_choices():
