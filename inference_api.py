@@ -563,6 +563,8 @@ async def upload_ref_wave(file: UploadFile = File(...)):
         f.write(file.file.read())    
     return ref_wav_path
 
+from scipy.io.wavfile import write
+
 @app.post("/tts")
 async def tts(request: TTSRequest):
     audio_generator = inference.get_tts_wav(
@@ -577,9 +579,8 @@ async def tts(request: TTSRequest):
         request.temperature,
         request.ref_free
     )
-    with open("output.wav", "wb") as f:
-        for chunk in audio_generator:
-            f.write(chunk[1].tobytes())
+    for chunk in audio_generator:
+        write("output.wav", chunk[0], chunk[1])
     return FileResponse("output.wav")
 
 @app.get("/change_choices")
