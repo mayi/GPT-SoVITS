@@ -1,6 +1,8 @@
-import os
+import os, sys
 import traceback,gradio as gr
 import logging
+now_dir = os.getcwd()
+sys.path.insert(0, now_dir)
 from tools.i18n.i18n import I18nAuto
 i18n = I18nAuto()
 
@@ -8,7 +10,6 @@ logger = logging.getLogger(__name__)
 import librosa,ffmpeg
 import soundfile as sf
 import torch
-import sys
 from mdxnet import MDXNetDereverb
 from vr import AudioPre, AudioPreDeEcho
 
