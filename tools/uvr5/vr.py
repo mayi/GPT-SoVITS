@@ -112,7 +112,8 @@ class AudioPre:
 
         if is_hp3 == True:
             ins_root,vocal_root = vocal_root,ins_root
-
+        
+        result = {"vocal": None, "instrument": None}
         if ins_root is not None:
             if self.data["high_end_process"].startswith("mirroring"):
                 input_high_end_ = spec_utils.mirroring(
@@ -129,14 +130,16 @@ class AudioPre:
             else:
                 head = "instrument_"
             if format in ["wav", "flac"]:
-                sf.write(
-                    os.path.join(
+                path = os.path.join(
                         ins_root,
                         head + "{}_{}.{}".format(name, self.data["agg"], format),
-                    ),
+                    )
+                sf.write(
+                    path,
                     (np.array(wav_instrument) * 32768).astype("int16"),
                     self.mp.param["sr"],
                 )  #
+                result['instrument'] = path
             else:
                 path = os.path.join(
                     ins_root, head + "{}_{}.wav".format(name, self.data["agg"])
@@ -150,6 +153,7 @@ class AudioPre:
                     opt_format_path = path[:-4] + ".%s" % format
                     os.system("ffmpeg -i %s -vn %s -q:a 2 -y" % (path, opt_format_path))
                     if os.path.exists(opt_format_path):
+                        result['instrument'] = opt_format_path
                         try:
                             os.remove(path)
                         except:
@@ -170,14 +174,16 @@ class AudioPre:
                 wav_vocals = spec_utils.cmb_spectrogram_to_wave(v_spec_m, self.mp)
             logger.info("%s vocals done" % name)
             if format in ["wav", "flac"]:
-                sf.write(
-                    os.path.join(
+                path = os.path.join(
                         vocal_root,
                         head + "{}_{}.{}".format(name, self.data["agg"], format),
-                    ),
+                    )
+                sf.write(
+                    path,
                     (np.array(wav_vocals) * 32768).astype("int16"),
                     self.mp.param["sr"],
                 )
+                result['vocal'] = path
             else:
                 path = os.path.join(
                     vocal_root, head + "{}_{}.wav".format(name, self.data["agg"])
@@ -191,11 +197,12 @@ class AudioPre:
                     opt_format_path = path[:-4] + ".%s" % format
                     os.system("ffmpeg -i %s -vn %s -q:a 2 -y" % (path, opt_format_path))
                     if os.path.exists(opt_format_path):
+                        result["vocal"] = opt_format_path
                         try:
                             os.remove(path)
                         except:
                             pass
-
+        return result
 
 class AudioPreDeEcho:
     def __init__(self, agg, model_path, device, is_half, tta=False):
@@ -294,6 +301,7 @@ class AudioPreDeEcho:
         y_spec_m = pred * X_phase
         v_spec_m = X_spec_m - y_spec_m
 
+        result = {"vocal": None, "instrument": None}
         if ins_root is not None:
             if self.data["high_end_process"].startswith("mirroring"):
                 input_high_end_ = spec_utils.mirroring(
@@ -306,14 +314,16 @@ class AudioPreDeEcho:
                 wav_instrument = spec_utils.cmb_spectrogram_to_wave(y_spec_m, self.mp)
             logger.info("%s instruments done" % name)
             if format in ["wav", "flac"]:
-                sf.write(
-                    os.path.join(
+                path = os.path.join(
                         ins_root,
                         "vocal_{}_{}.{}".format(name, self.data["agg"], format),
-                    ),
+                    )
+                sf.write(
+                    path,
                     (np.array(wav_instrument) * 32768).astype("int16"),
                     self.mp.param["sr"],
                 )  #
+                result['instrument'] = path
             else:
                 path = os.path.join(
                     ins_root, "vocal_{}_{}.wav".format(name, self.data["agg"])
@@ -327,6 +337,7 @@ class AudioPreDeEcho:
                     opt_format_path = path[:-4] + ".%s" % format
                     os.system("ffmpeg -i %s -vn %s -q:a 2 -y" % (path, opt_format_path))
                     if os.path.exists(opt_format_path):
+                        result['instrument'] = opt_format_path
                         try:
                             os.remove(path)
                         except:
@@ -343,14 +354,16 @@ class AudioPreDeEcho:
                 wav_vocals = spec_utils.cmb_spectrogram_to_wave(v_spec_m, self.mp)
             logger.info("%s vocals done" % name)
             if format in ["wav", "flac"]:
-                sf.write(
-                    os.path.join(
+                path = os.path.join(
                         vocal_root,
                         "instrument_{}_{}.{}".format(name, self.data["agg"], format),
-                    ),
+                    )
+                sf.write(
+                    path,
                     (np.array(wav_vocals) * 32768).astype("int16"),
                     self.mp.param["sr"],
                 )
+                result['vocal'] = path
             else:
                 path = os.path.join(
                     vocal_root, "instrument_{}_{}.wav".format(name, self.data["agg"])
@@ -364,7 +377,9 @@ class AudioPreDeEcho:
                     opt_format_path = path[:-4] + ".%s" % format
                     os.system("ffmpeg -i %s -vn %s -q:a 2 -y" % (path, opt_format_path))
                     if os.path.exists(opt_format_path):
+                        result["vocal"] = opt_format_path
                         try:
                             os.remove(path)
                         except:
                             pass
+        return result
