@@ -87,7 +87,7 @@ class UVR5():
                 stream0 = info["streams"][0]
                 if (stream0["channels"] == 2 and stream0["sample_rate"] == "44100"):
                     is_need_reformat = False
-                    pre_fun._path_audio_(
+                    result = pre_fun._path_audio_(
                         input_wave_file_path, self.output_instrument_path, self.output_vocal_path, format0, is_hp3
                     )
                     is_done = True
@@ -105,6 +105,12 @@ class UVR5():
                     result = pre_fun._path_audio_(
                         input_wave_file_path, self.output_instrument_path, self.output_vocal_path, format0, is_hp3
                     )
+                vocal_filename = os.path.basename(result["vocal"])
+                instrument_filename = os.path.basename(result["instrument"])
+                if vocal_filename.startswith("instrument") and instrument_filename.startswith("vocal"):
+                    vocal_filename, instrument_filename = instrument_filename, vocal_filename
+                result["vocal"] = vocal_filename
+                result["instrument"] = instrument_filename
                 return {"message": "%s->Success" % (os.path.basename(input_wave_file_path)), "result": result}
             except:
                 return {"message": "%s->%s" % (os.path.basename(input_wave_file_path), traceback.format_exc())}
@@ -166,3 +172,13 @@ async def upload_wave_file(file: UploadFile = File(...)):
     with open(file_path, "wb") as f:
         f.write(file.file.read())
     return filename
+
+@app.get("/uvr5/output/vocal/{filename}")
+async def output_vocal(filename: str):
+    file_path = os.path.join(uvr.output_vocal_path, filename)
+    return FileResponse(file_path)
+
+@app.get("/uvr5/output/instrument/{filename}")
+async def output_instrument(filename: str):
+    file_path = os.path.join(uvr.output_instrument_path, filename)
+    return FileResponse(file_path)
