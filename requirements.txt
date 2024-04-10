@@ -27,5 +27,6 @@ LangSegment>=0.2.0
 Faster_Whisper
 wordsegment
 streamlit
+st_pages
 fastapi
 uvicorn[standard]
