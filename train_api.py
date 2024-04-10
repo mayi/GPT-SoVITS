@@ -68,7 +68,7 @@ class UVR5():
         try:
             is_hp3 = "HP3" in model_name
             if model_name == "onnx_dereverb_By_FoxJoy":
-                pre_fun = MDXNetDereverb(15)
+                pre_fun = MDXNetDereverb(15, onnx=os.path.join(self.uvr5_weight_path, model_name))
             else:
                 func = AudioPre if "DeEcho" not in model_name else AudioPreDeEcho
                 pre_fun = func(

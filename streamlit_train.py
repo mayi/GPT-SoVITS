@@ -23,7 +23,7 @@ class UVR5UI:
             logging.error("No uvr5 weight names")
             return
 
-        self.model_name = self.uvr5_weight_names[0]
+        self.model_name = self.uvr5_weight_names[2]
         self.format0 = "mp3"
 
     def get_uvr5_weight_names(self):
