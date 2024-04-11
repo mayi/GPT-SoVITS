@@ -25,6 +25,9 @@ import soundfile as sf
 import torch
 from mdxnet import MDXNetDereverb
 from vr import AudioPre, AudioPreDeEcho
+import my_utils
+from config import python_exec
+from subprocess import Popen
 
 from tools.i18n.i18n import I18nAuto
 
@@ -130,6 +133,62 @@ class UVR5():
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
+class Slice():
+    def __init__(self, temp_path):
+        self.input_root_path = os.path.join(temp_path, "slice", "input")
+        self.output_root_path = os.path.join(temp_path, "slice", "output")
+        os.makedirs(self.input_root_path, exist_ok=True)
+        os.makedirs(self.output_root_path, exist_ok=True)
+
+        # threshold:音量小于这个值视作静音的备选切割点
+        self.threshold = -34
+        # min_length:每段最小多长，如果第一段太短一直和后面段连起来直到超过这个值
+        self.min_length = 4000
+        # min_interval:最短切割间隔
+        self.min_interval = 300
+        # hop_size:怎么算音量曲线，越小精度越大计算量越高（不是精度越大效果越好）
+        self.hop_size = 10
+        # max_sil_kept:切完后静音最多留多长
+        self.max_sil_kept = 500
+        # max:归一化后最大值多少
+        self.max = 0.9
+        # alpha_mix:混多少比例归一化后音频进来
+        self.alpha_mix = 0.25
+        # 文件夹切割使用的进程数
+        self.n_process = 4
+
+    # 文件切割
+    def run(self, subdir, filename, threshold=None, min_length=None, min_interval=None, hop_size=None, max_sil_kept=None, max=None, alpha_mix=None):
+        if threshold is not None:
+            self.threshold = threshold
+        if min_length is not None:
+            self.min_length = min_length
+        if min_interval is not None:
+            self.min_interval = min_interval
+        if hop_size is not None:
+            self.hop_size = hop_size
+        if max_sil_kept is not None:
+            self.max_sil_kept = max_sil_kept
+        if max is not None:
+            self.max = max
+        if alpha_mix is not None:
+            self.alpha_mix = alpha_mix
+
+        input_path = os.path.join(self.input_root_path, subdir)
+        output_path = os.path.join(self.output_root_path, subdir)
+        input_file_path = os.path.join(input_path, filename)
+        if not os.path.isfile(input_file_path):
+            return {"message": "input_file_path is not a file"}
+        my_utils.clean_path(input_path)
+        my_utils.clean_path(output_path)
+
+        cmd = '"%s" tools/slice_audio.py "%s" "%s" %s %s %s %s %s %s %s %s %s''' % (python_exec,input_path, output_path, self.threshold, self.min_length, self.min_interval, self.hop_size, self.max_sil_kept, self.max, self.alpha_mix, 1, 1)
+        print(cmd)
+        p = Popen(cmd, shell=True)
+        p.wait()
+        return {"message": "Success", "result": os.listdir(output_path)}
+
+
 
 app = FastAPI()
 
@@ -147,6 +206,8 @@ if temp_path is None:
     exit()
 
 uvr = UVR5(weight_path, device, False, temp_path)
+
+slice = Slice(temp_path)
 
 class UVR5Request(BaseModel):
     modelname: str
@@ -182,3 +243,12 @@ async def output_vocal(filename: str):
 async def output_instrument(filename: str):
     file_path = os.path.join(uvr.output_instrument_path, filename)
     return FileResponse(file_path)
+
+class SliceRequest(BaseModel):
+    subdir: str
+    filename: str
+
+@app.post("/slice")
+async def slice_audio(request: SliceRequest):
+    result = slice.run(request.subdir, request.filename)
+    return result
