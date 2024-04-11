@@ -253,13 +253,13 @@ async def slice_audio(request: SliceRequest):
     result = slice.run(request.subdir, request.filename)
     return result
 
-import time
+from datetime import datetime
 
 @app.post("/slice/upload_wave_file")
 async def upload_wave_file(file: UploadFile = File(...)):
-    subdir = time.now().strftime("%Y%m%d%H%M%S")
+    subdir = datetime.now().strftime("%Y%m%d%H%M%S")
     filename = uuid.uuid4().hex
-    os.path.makedirs(os.path.join(slice.input_root_path, subdir), exist_ok=True)
+    os.makedirs(os.path.join(slice.input_root_path, subdir), exist_ok=True)
     file_path = os.path.join(slice.input_root_path, subdir, filename)
     with open(file_path, "wb") as f:
         f.write(file.file.read())
