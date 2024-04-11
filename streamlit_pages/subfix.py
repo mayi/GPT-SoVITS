@@ -312,200 +312,53 @@ if __name__ == "__main__":
 
     set_global(args.load_json, args.load_list, args.json_key_text, args.json_key_path, args.g_batch)
     
-    with gr.Blocks() as demo:
+    st.sidebar.title("Controls")
 
-        with gr.Row():
-            btn_change_index = gr.Button("Change Index")
-            btn_submit_change = gr.Button("Submit Text")
-            btn_merge_audio = gr.Button("Merge Audio")
-            btn_delete_audio = gr.Button("Delete Audio")
-            btn_previous_index = gr.Button("Previous Index")
-            btn_next_index = gr.Button("Next Index")
-            
-        with gr.Row():
-            index_slider = gr.Slider(
-                    minimum=0, maximum=g_max_json_index, value=g_index, step=1, label="Index", scale=3
-            )
-            splitpoint_slider = gr.Slider(
-                    minimum=0, maximum=120.0, value=0, step=0.1, label="Audio Split Point(s)", scale=3
-            )
-            btn_audio_split = gr.Button("Split Audio", scale=1)
-            btn_save_json = gr.Button("Save File", visible=True, scale=1)
-            btn_invert_selection = gr.Button("Invert Selection", scale=1)
+    index = st.sidebar.slider("Index", min_value=0, max_value=g_max_json_index, value=g_index, step=1)
+    batch_size = st.sidebar.slider("Batch Size", min_value=1, max_value=g_batch, value=g_batch, step=1)
+    audio_split_point = st.sidebar.slider("Audio Split Point(s)", min_value=0.0, max_value=120.0, value=0, step=0.1)
+    interval = st.sidebar.slider("Interval", min_value=0, max_value=2, value=0, step=0.01)
+
+    btn_change_index = st.sidebar.button("Change Index")
+    btn_submit_change = st.sidebar.button("Submit Text")
+    btn_merge_audio = st.sidebar.button("Merge Audio")
+    btn_delete_audio = st.sidebar.button("Delete Audio")
+    btn_previous_index = st.sidebar.button("Previous Index")
+    btn_next_index = st.sidebar.button("Next Index")
+    btn_audio_split = st.sidebar.button("Split Audio")
+    btn_save_json = st.sidebar.button("Save File")
+    btn_invert_selection = st.sidebar.button("Invert Selection")
+
+    if btn_change_index:
+        b_change_index(index, batch_size)
+
+    if btn_submit_change:
+        b_submit_change(*g_text_list)
+
+    if btn_merge_audio:
+        b_merge_audio(interval, *g_checkbox_list)
+
+    if btn_delete_audio:
+        b_delete_audio(*g_checkbox_list)
+
+    if btn_previous_index:
+        b_previous_index(index, batch_size)
+
+    if btn_next_index:
+        b_next_index(index, batch_size)
+
+    if btn_audio_split:
+        b_audio_split(audio_split_point, *g_checkbox_list)
+
+    if btn_invert_selection:
+        b_invert_selection(*g_checkbox_list)
+
+    if btn_save_json:
+        b_save_file()
+
+    for i in range(g_batch):
+        g_text_list[i] = st.text_input(f"Text {i+1}", g_text_list[i])
+        g_audio_list[i] = st.audio(g_audio_list[i])
+        g_checkbox_list[i] = st.checkbox(f"Choose Audio {i+1}", g_checkbox_list[i])
         
-        with gr.Row():
-            with gr.Column():
-                for _ in range(0,g_batch):
-                    with gr.Row():
-                        text = gr.Textbox(
-                            label = "Text",
-                            visible = True,
-                            scale=5
-                        )
-                        audio_output = gr.Audio(
-                            label="Output Audio",
-                            visible = True,
-                            scale=5
-                        )
-                        audio_check = gr.Checkbox(
-                            label="Yes",
-                            show_label = True,
-                            info = "Choose Audio",
-                            scale=1
-                        )
-                        g_text_list.append(text)
-                        g_audio_list.append(audio_output)
-                        g_checkbox_list.append(audio_check)
-
-
-
-        with gr.Row():
-            batchsize_slider = gr.Slider(
-                    minimum=1, maximum=g_batch, value=g_batch, step=1, label="Batch Size", scale=3, interactive=False
-            )
-            interval_slider = gr.Slider(
-                    minimum=0, maximum=2, value=0, step=0.01, label="Interval", scale=3
-            )
-            btn_theme_dark = gr.Button("Light Theme", link="?__theme=light", scale=1)
-            btn_theme_light = gr.Button("Dark Theme", link="?__theme=dark", scale=1)
-        
-        btn_change_index.click(
-            b_change_index,
-            inputs=[
-                index_slider,
-                batchsize_slider,
-            ],
-            outputs=[
-                *g_text_list,
-                *g_audio_list,
-                *g_checkbox_list
-            ],
-        )
-
-        
-        btn_submit_change.click(
-            b_submit_change,
-            inputs=[
-                *g_text_list,
-            ],
-            outputs=[
-                index_slider,
-                *g_text_list,
-                *g_audio_list,
-                *g_checkbox_list
-            ],
-        )
-
-        btn_previous_index.click(
-            b_previous_index,
-            inputs=[
-                index_slider,
-                batchsize_slider,
-            ],
-            outputs=[
-                index_slider,
-                *g_text_list,
-                *g_audio_list,
-                *g_checkbox_list
-            ],
-        )
-        
-        btn_next_index.click(
-            b_next_index,
-            inputs=[
-                index_slider,
-                batchsize_slider,
-            ],
-            outputs=[
-                index_slider,
-                *g_text_list,
-                *g_audio_list,
-                *g_checkbox_list
-            ],
-        )
-
-        btn_delete_audio.click(
-            b_delete_audio,
-            inputs=[
-                *g_checkbox_list
-            ],
-            outputs=[
-                index_slider,
-                *g_text_list,
-                *g_audio_list,
-                *g_checkbox_list
-            ]
-        )
-
-        btn_merge_audio.click(
-            b_merge_audio,
-            inputs=[
-                interval_slider,
-                *g_checkbox_list
-            ],
-            outputs=[
-                index_slider,
-                *g_text_list,
-                *g_audio_list,
-                *g_checkbox_list
-            ]
-        )
-
-        btn_audio_split.click(
-            b_audio_split,
-            inputs=[
-                splitpoint_slider,
-                *g_checkbox_list
-            ],
-            outputs=[
-                index_slider,
-                *g_text_list,
-                *g_audio_list,
-                *g_checkbox_list
-            ]
-        )
-
-        btn_invert_selection.click(
-            b_invert_selection,
-            inputs=[
-                *g_checkbox_list
-            ],
-            outputs=[
-                *g_checkbox_list
-            ]
-        )
-
-        btn_save_json.click(
-            b_save_file
-        )
-
-        demo.load(
-            b_change_index,
-            inputs=[
-                index_slider,
-                batchsize_slider,
-            ],
-            outputs=[
-                *g_text_list,
-                *g_audio_list,
-                *g_checkbox_list
-            ],
-        )
-        
-    demo.launch(
-        server_name="0.0.0.0",
-        inbrowser=True,
-        quiet=True,
-        share=eval(args.is_share),
-        server_port=int(args.webui_port_subfix)
-    )
-
-
-class SubfixUI:
-    def __init__(self):
-        pass
-
-    def run(self):
-        # 使用Streamlit重写gradio的代码
-        pass
 
