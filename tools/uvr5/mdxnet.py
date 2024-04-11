@@ -239,8 +239,8 @@ class Predictor:
 
 
 class MDXNetDereverb:
-    def __init__(self, chunks):
-        self.onnx = "%s/uvr5_weights/onnx_dereverb_By_FoxJoy"%os.path.dirname(os.path.abspath(__file__))
+    def __init__(self, chunks, onnx="%s/uvr5_weights/onnx_dereverb_By_FoxJoy"%os.path.dirname(os.path.abspath(__file__))):
+        self.onnx = onnx
         self.shifts = 10  # 'Predict with randomised equivariant stabilisation'
         self.mixing = "min_mag"  # ['default','min_mag','max_mag']
         self.chunks = chunks
